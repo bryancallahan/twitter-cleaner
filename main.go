@@ -252,7 +252,7 @@ func getTweet(api *anaconda.TwitterApi, s string) (anaconda.Tweet, error) {
 
 func main() {
 	app.UsageTemplate(kingpin.SeparateOptionalFlagsUsageTemplate)
-	app.Author("Carlos Alexandro Becker <root@carlosbecker.dev>")
+	app.Author("Forked from github.com/caarlos0/twitter-cleaner")
 	app.Version("twitter-cleaner version " + version)
 	app.VersionFlag.Short('v')
 	app.HelpFlag.Short('h')
