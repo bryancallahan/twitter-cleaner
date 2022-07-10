@@ -4,7 +4,7 @@ Automatically delete tweets, retweets, and favorites from your timeline, and, if
 
 ## Fork notes
 
-Use [`jq`](https://stedolan.github.io/jq/manual/#select(boolean_expression)) to explore/splice output, e.g. list all of the text from set of deleted tweets: `jq '.[].text?' deleted-tweets-20220710-163335.json`.
+Use [`jq`](https://stedolan.github.io/jq/manual/#select(boolean_expression)) to explore/splice output, e.g. list all of the text from set of deleted tweets: `jq '.[].text?' deleted-tweets-20220710-163335.json`. Check out the [Tweet](https://sourcegraph.com/github.com/ChimeraCoder/anaconda/-/blob/tweet.go?L9) structure source graph for details of the data model.
 
 ## Usage
 
