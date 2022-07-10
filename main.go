@@ -1,8 +1,10 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"net/url"
 	"os"
 	"strconv"
@@ -18,6 +20,7 @@ import (
 
 var (
 	version           = "dev"
+	timestampFormat   = "20060102-150405"
 	app               = kingpin.New("twitter-cleaner", "clean up old twitter tweets and likes")
 	keeplist          = app.Flag("keep", "do not delete tweets that contain these words or tweet IDs").Strings()
 	maxAge            = app.Flag("max-age", "delete tweets older than this").Default("720h").Duration()
@@ -72,6 +75,7 @@ func isWhitelisted(id int64, text string) bool {
 func deleteFromTimeline(api *anaconda.TwitterApi) error {
 	var deletedCount int64
 	var maxID string
+	var deletedTweets []anaconda.Tweet
 
 	for i := 1; i <= 10; i++ {
 		timeline, err := getTimeline(api, maxID)
@@ -89,10 +93,16 @@ func deleteFromTimeline(api *anaconda.TwitterApi) error {
 				deletedCount++
 			}
 			maxID = fmt.Sprintf("%d", t.Id)
+
+			deletedTweets = append(deletedTweets, t)
 		}
 	}
 
-	log.Infof("deleted %d tweets from twitter timeline", deletedCount)
+	filename := fmt.Sprintf("deleted-tweets-%s.json", time.Now().Format(timestampFormat))
+	file, _ := json.Marshal(deletedTweets)
+	_ = ioutil.WriteFile(filename, file, 0644)
+
+	log.Infof("deleted %d tweets from twitter timeline (wrote to %s)", deletedCount, filename)
 	return nil
 }
 
@@ -150,6 +160,7 @@ func deleteTweet(api *anaconda.TwitterApi, t anaconda.Tweet) (bool, error) {
 func unFavorite(api *anaconda.TwitterApi) error {
 	var unfavedCount int64
 	var maxID string
+	var unfavoritedTweets []anaconda.Tweet
 
 	for i := 1; i <= 10; i++ {
 		faves, err := getFaves(api, maxID)
@@ -167,10 +178,16 @@ func unFavorite(api *anaconda.TwitterApi) error {
 				unfavedCount++
 			}
 			maxID = fmt.Sprintf("%d", t.Id)
+
+			unfavoritedTweets = append(unfavoritedTweets, t)
 		}
 	}
 
-	log.Infof("unfavorited %d tweets from twitter timeline", unfavedCount)
+	filename := fmt.Sprintf("unfavorited-tweets-%s.json", time.Now().Format(timestampFormat))
+	file, _ := json.Marshal(unfavoritedTweets)
+	_ = ioutil.WriteFile(filename, file, 0644)
+
+	log.Infof("unfavorited %d tweets from twitter timeline (wrote to %s)", unfavedCount, filename)
 	return nil
 }
 

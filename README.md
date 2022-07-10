@@ -2,6 +2,10 @@
 
 Automatically delete tweets, retweets, and favorites from your timeline, and, if provided, from your twitter archive as well.
 
+## Fork notes
+
+Use [`jq`](https://stedolan.github.io/jq/manual/#select(boolean_expression)) to explore/splice output, e.g. list all of the text from set of deleted tweets: `jq '.[].text?' deleted-tweets-20220710-163335.json`.
+
 ## Usage
 
 You'll need [API keys](https://github.com/caarlos0/twitter-cleaner#api-keys).
