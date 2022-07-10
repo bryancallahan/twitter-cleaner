@@ -1,14 +1,10 @@
 package main
 
 import (
-	"bytes"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"net/url"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -29,7 +25,6 @@ var (
 	consumerSecret    = app.Flag("twitter-consumer-secret", "your twitter consumer secret").Envar("TWITTER_CONSUMER_SECRET").Required().String()
 	accessToken       = app.Flag("twitter-access-token", "your twitter access token").Envar("TWITTER_ACCESS_TOKEN").Required().String()
 	accessTokenSecret = app.Flag("twitter-access-token-secret", "your twitter access token secret").Envar("TWITTER_ACCESS_TOKEN_SECRET").Required().String()
-	archiveFolder     = app.Flag("twitter-archive-path", "path to the twitter archive, if you pass this flag, twitter-cleaner will try to delete your tweets from there too").File()
 	dryRun            = app.Flag("dry-run", "do not actually ").Bool()
 	keepLikes         = app.Flag("keep-likes", "do not unfavorite tweets").Bool()
 	debug             = app.Flag("debug", "enables debug logs").Bool()
@@ -216,69 +211,6 @@ func unFavoriteTweet(api *anaconda.TwitterApi, t anaconda.Tweet) (bool, error) {
 	return true, nil
 }
 
-func deleteFromData(api *anaconda.TwitterApi) error {
-	data := *archiveFolder
-	bts, err := ioutil.ReadFile(filepath.Join(data.Name(), "data/tweet.js"))
-	if err != nil {
-		return err
-	}
-
-	var tweets []struct {
-		Tweet struct {
-			ID string `json:"id"`
-		} `json:"tweet"`
-	}
-
-	if err := json.Unmarshal(bytes.TrimPrefix(bts, []byte("window.YTD.tweet.part0 = ")), &tweets); err != nil {
-		return err
-	}
-
-	f, err := os.OpenFile(filepath.Join(data.Name(), "data/handled_tweets.txt"), os.O_APPEND|os.O_RDWR|os.O_CREATE, 0o644)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	ids, err := ioutil.ReadAll(f)
-	if err != nil {
-		return err
-	}
-
-	var deletedCount int64
-	for _, t := range tweets {
-		log := log.WithField("id", t.Tweet.ID)
-		if bytes.Contains(ids, []byte(t.Tweet.ID)) {
-			log.Debug("ignoring tweet handled in previous runs")
-			continue
-		}
-		tweet, err := getTweet(api, t.Tweet.ID)
-		if err != nil {
-			return err
-		}
-		if tweet.Id == 0 { // empty tweet, 404 probably
-			log.Debug("couldn't find tweet")
-			if _, err := f.WriteString(t.Tweet.ID + "\n"); err != nil {
-				return err
-			}
-			continue
-		}
-		deleted, err := deleteTweet(api, tweet)
-		if err != nil {
-			return err
-		}
-		if deleted {
-			deletedCount++
-		}
-
-		if _, err := f.WriteString(t.Tweet.ID + "\n"); err != nil {
-			return err
-		}
-	}
-
-	log.Infof("deleted %d tweets from twitter archive", deletedCount)
-	return nil
-}
-
 func getTweet(api *anaconda.TwitterApi, s string) (anaconda.Tweet, error) {
 	id, err := strconv.ParseInt(s, 10, 64)
 	if err != nil {
@@ -318,69 +250,6 @@ func getTweet(api *anaconda.TwitterApi, s string) (anaconda.Tweet, error) {
 	return tweet, nil
 }
 
-func unlikeFromData(api *anaconda.TwitterApi) error {
-	data := *archiveFolder
-
-	bts, err := ioutil.ReadFile(filepath.Join(data.Name(), "data/like.js"))
-	if err != nil {
-		return err
-	}
-
-	var likes []struct {
-		Like struct {
-			TweetID string `json:"tweetId"`
-		} `json:"like"`
-	}
-
-	if err := json.Unmarshal(bytes.TrimPrefix(bts, []byte("window.YTD.like.part0 = ")), &likes); err != nil {
-		return err
-	}
-
-	f, err := os.OpenFile(filepath.Join(data.Name(), "data/handled_likes.txt"), os.O_APPEND|os.O_RDWR|os.O_CREATE, 0o644)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	ids, err := ioutil.ReadAll(f)
-	if err != nil {
-		return err
-	}
-
-	var unfavCount int64
-	for _, t := range likes {
-		log := log.WithField("id", t.Like.TweetID)
-		if bytes.Contains(ids, []byte(t.Like.TweetID)) {
-			log.Debug("ignoring tweet handled in previous runs")
-			continue
-		}
-		tweet, err := getTweet(api, t.Like.TweetID)
-		if err != nil {
-			return err
-		}
-		if tweet.Id == 0 { // empty tweet, 404 probably
-			log.Debug("couldn't find tweet")
-			if _, err := f.WriteString(t.Like.TweetID + "\n"); err != nil {
-				return err
-			}
-			continue
-		}
-		unfaved, err := unFavoriteTweet(api, tweet)
-		if err != nil {
-			return err
-		}
-		if unfaved {
-			unfavCount++
-		}
-		if _, err := f.WriteString(t.Like.TweetID + "\n"); err != nil {
-			return err
-		}
-	}
-
-	log.Infof("unfavorited %d tweets from archive", unfavCount)
-	return nil
-}
-
 func main() {
 	app.UsageTemplate(kingpin.SeparateOptionalFlagsUsageTemplate)
 	app.Author("Carlos Alexandro Becker <root@carlosbecker.dev>")
@@ -398,20 +267,6 @@ func main() {
 	anaconda.SetConsumerSecret(*consumerSecret)
 	api := anaconda.NewTwitterApi(*accessToken, *accessTokenSecret)
 	api.SetLogger(anaconda.BasicLogger)
-
-	if *archiveFolder != nil {
-		log.Infof("deleting tweets from twitter archive at %s", (*archiveFolder).Name())
-		if err := deleteFromData(api); err != nil {
-			log.WithError(err).Fatal("failed to delete tweets from archive")
-		}
-
-		if !*keepLikes {
-			log.Infof("unfavoriting tweets from twitter archive at %s", (*archiveFolder).Name())
-			if err := unlikeFromData(api); err != nil {
-				log.WithError(err).Fatal("failed to unfavorite tweets from archive")
-			}
-		}
-	}
 
 	log.Info("deleting tweets from twitter timeline")
 	if err := deleteFromTimeline(api); err != nil {
